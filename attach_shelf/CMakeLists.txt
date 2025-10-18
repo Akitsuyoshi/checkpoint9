@@ -8,6 +8,19 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+# Create executable
+add_executable(pre_approach_node src/pre_approach.cpp)
+
+# Add dependencies
+ament_target_dependencies(pre_approach_node rclcpp geometry_msgs sensor_msgs)
+
+# Install executables
+install(TARGETS
+	pre_approach_node
+	DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
