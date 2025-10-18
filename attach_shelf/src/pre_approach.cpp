@@ -42,8 +42,10 @@ public:
     // Params
     declare_parameter<double>("obstacle", 0.3);
     get_parameter("obstacle", obstacle_);
-    declare_parameter<double>("degrees", -90);
-    get_parameter("degrees", degrees_);
+    declare_parameter<int>("degrees", -90);
+    int degrees_int;
+    get_parameter("degrees", degrees_int);
+    degrees_ = static_cast<double>(degrees_int);
     // convert from degree to radiant
     degrees_ *= M_PI / 180.0;
 
@@ -62,7 +64,7 @@ private:
       return;
     }
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    double forward_range = M_PI / 8;
+    double forward_range = M_PI / 4;
     int forward_start = std::clamp(
         static_cast<int>(std::round((-forward_range - msg->angle_min) /
                                     msg->angle_increment)),
@@ -74,9 +76,11 @@ private:
 
     auto min_foward_distance = *std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
-    if (min_foward_distance > obstacle_) {
+    if (min_foward_distance > obstacle_ + 0.01) {
       set_robot_state(MOVING);
     } else {
+      RCLCPP_INFO(get_logger(), "Obstacle detected (%.3f m < %.3f m)",
+                  min_foward_distance, obstacle_);
       set_robot_state(TURNING);
     }
   }
@@ -94,8 +98,9 @@ private:
       init_yaw_ = yaw;
     }
     double yaw_diff = norm_angle(yaw - init_yaw_);
-    if (std::abs(yaw_diff) >= std::abs(degrees_)) {
-      RCLCPP_INFO(get_logger(), "Finished pre approach");
+    if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.02) {
+      RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
+                  yaw_diff);
       set_robot_state(STOPPED);
     }
   }
@@ -106,7 +111,7 @@ private:
     case STOPPED:
       break;
     case MOVING:
-      cmd.linear.x = 0.5;
+      cmd.linear.x = 0.4;
       break;
     case TURNING:
       cmd.angular.z = (degrees_ > 0) ? M_PI / 8 : -M_PI / 8;
@@ -125,6 +130,9 @@ private:
 
   void set_robot_state(RobotState rs) {
     std::lock_guard<std::mutex> lck(mutex_);
+    if (rs != rs_) {
+      RCLCPP_INFO(get_logger(), "Robot state changed");
+    }
     rs_ = rs;
   }
   RobotState get_robot_state() {
