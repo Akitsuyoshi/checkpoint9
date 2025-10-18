@@ -26,6 +26,15 @@ public:
                                    10);
     timer_ = create_wall_timer(std::chrono::milliseconds(100),
                                [this]() { return callback(); });
+
+    // Params
+    declare_parameter<double>("obstacle", 0.3);
+    get_parameter("obstacle", obstacle_);
+    declare_parameter<double>("degrees", -90);
+    get_parameter("degrees", degrees_);
+    // convert from degree to radiant
+    degrees_ *= M_PI / 180.0;
+
     RCLCPP_INFO(get_logger(), "Node is ready");
   }
 
@@ -53,7 +62,7 @@ private:
 
     auto min_foward_distance = *std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
-    if (min_foward_distance > 0.3) {
+    if (min_foward_distance > obstacle_) {
       set_robot_state(MOVING);
     } else {
       set_robot_state(TURNING);
@@ -73,7 +82,7 @@ private:
       init_yaw_ = yaw;
     }
     double yaw_diff = norm_angle(yaw - init_yaw_);
-    if (std::abs(yaw_diff) >= std::abs(-M_PI / 4)) {
+    if (std::abs(yaw_diff) >= std::abs(degrees_)) {
       RCLCPP_INFO(get_logger(), "Finished pre approach");
       set_robot_state(STOPPED);
     }
@@ -88,7 +97,7 @@ private:
       cmd.linear.x = 0.5;
       break;
     case TURNING:
-      cmd.angular.z = M_PI / 8;
+      cmd.angular.z = (degrees_ > 0) ? M_PI / 8 : -M_PI / 8;
       break;
     }
     pub_->publish(cmd);
@@ -111,6 +120,8 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   RobotState rs_;
   double init_yaw_;
+  double obstacle_;
+  double degrees_;
 };
 
 int main(int argc, char **argv) {
