@@ -1,20 +1,27 @@
 #include "geometry_msgs/msg/twist.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <chrono>
 #include <cmath>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 class PreApproach : public rclcpp::Node {
   using LaserScan = sensor_msgs::msg::LaserScan;
   using Twist = geometry_msgs::msg::Twist;
+  using Odometry = nav_msgs::msg::Odometry;
 
 public:
-  PreApproach() : Node("pre_approach_node"), rs_(STOPPED) {
+  PreApproach() : Node("pre_approach_node"), rs_(MOVING) {
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
     laser_sub_ = create_subscription<LaserScan>(
         "/scan", qos,
         [this](const LaserScan::SharedPtr msg) { return callback(msg); });
+    odom_sub_ = create_subscription<Odometry>(
+        "/odom", 10,
+        [this](const Odometry::SharedPtr msg) { return callback(msg); });
     pub_ = create_publisher<Twist>("/diffbot_base_controller/cmd_vel_unstamped",
                                    10);
     timer_ = create_wall_timer(std::chrono::milliseconds(100),
@@ -30,11 +37,10 @@ public:
 
 private:
   void callback(const LaserScan::SharedPtr msg) {
-    if (get_robot_state() == TURNING) {
+    if (get_robot_state() != MOVING) {
       return;
     }
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    // indx for forward +-45 degree on linear.x axis;
     double forward_range = M_PI / 8;
     int forward_start = std::clamp(
         static_cast<int>(std::round((-forward_range - msg->angle_min) /
@@ -54,6 +60,25 @@ private:
     }
   }
 
+  void callback(const Odometry::SharedPtr msg) {
+    if (get_robot_state() != TURNING) {
+      return;
+    }
+    auto q = msg->pose.pose.orientation;
+    tf2::Quaternion quat(q.x, q.y, q.z, q.w);
+    double roll, pitch, yaw;
+    tf2::Matrix3x3(quat).getRPY(roll, pitch, yaw);
+
+    if (!init_yaw_) {
+      init_yaw_ = yaw;
+    }
+    double yaw_diff = norm_angle(yaw - init_yaw_);
+    if (std::abs(yaw_diff) >= std::abs(-M_PI / 4)) {
+      RCLCPP_INFO(get_logger(), "Finished pre approach");
+      set_robot_state(STOPPED);
+    }
+  }
+
   void callback() {
     Twist cmd;
     switch (get_robot_state()) {
@@ -63,19 +88,29 @@ private:
       cmd.linear.x = 0.5;
       break;
     case TURNING:
-      cmd.angular.z = M_PI / 4;
+      cmd.angular.z = M_PI / 8;
       break;
     }
     pub_->publish(cmd);
   }
 
+  double norm_angle(double angle) const {
+    while (angle > M_PI)
+      angle -= 2.0 * M_PI;
+    while (angle < -M_PI)
+      angle += 2.0 * M_PI;
+    return angle;
+  }
+
   void set_robot_state(RobotState rs) { rs_ = rs; }
-  RobotState get_robot_state() { return rs_; }
+  RobotState get_robot_state() const { return rs_; }
 
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
+  rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   RobotState rs_;
+  double init_yaw_;
 };
 
 int main(int argc, char **argv) {
