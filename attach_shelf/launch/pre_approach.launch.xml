@@ -1,0 +1,18 @@
+<launch>
+  <!-- Rviz2 -->
+  <arg name="rviz_config" default="$(find-pkg-share attach_shelf)/rviz/config.rviz"
+       description="Path to the RViz configuration file"/>
+
+  <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen"
+        args="-d $(var rviz_config)">
+  </node>
+
+  <!-- pre_approach_node -->
+  <arg name="obstacle" default="0.3"/>
+  <arg name="degrees" default="-90"/>
+
+  <node pkg="attach_shelf" exec="pre_approach_node" name="pre_approach_node">
+    <param name="obstacle" value="$(var obstacle)"/>
+    <param name="degrees" value="$(var degrees)"/>
+  </node>
+</launch>
