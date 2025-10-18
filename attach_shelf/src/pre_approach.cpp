@@ -1,10 +1,13 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "rclcpp/executor_options.hpp"
+#include "rclcpp/executors/multi_threaded_executor.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <chrono>
 #include <cmath>
+#include <mutex>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 
@@ -15,17 +18,26 @@ class PreApproach : public rclcpp::Node {
 
 public:
   PreApproach() : Node("pre_approach_node"), rs_(MOVING) {
+    reentrant_group_ =
+        create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    mutually_exclusive_group_ =
+        create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    rclcpp::SubscriptionOptions sub_options;
+    sub_options.callback_group = reentrant_group_;
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
     laser_sub_ = create_subscription<LaserScan>(
         "/scan", qos,
-        [this](const LaserScan::SharedPtr msg) { return callback(msg); });
+        [this](const LaserScan::SharedPtr msg) { return callback(msg); },
+        sub_options);
     odom_sub_ = create_subscription<Odometry>(
         "/odom", 10,
-        [this](const Odometry::SharedPtr msg) { return callback(msg); });
+        [this](const Odometry::SharedPtr msg) { return callback(msg); },
+        sub_options);
     pub_ = create_publisher<Twist>("/diffbot_base_controller/cmd_vel_unstamped",
                                    10);
-    timer_ = create_wall_timer(std::chrono::milliseconds(100),
-                               [this]() { return callback(); });
+    timer_ = create_wall_timer(
+        std::chrono::milliseconds(100), [this]() { return callback(); },
+        mutually_exclusive_group_);
 
     // Params
     declare_parameter<double>("obstacle", 0.3);
@@ -111,13 +123,23 @@ private:
     return angle;
   }
 
-  void set_robot_state(RobotState rs) { rs_ = rs; }
-  RobotState get_robot_state() const { return rs_; }
+  void set_robot_state(RobotState rs) {
+    std::lock_guard<std::mutex> lck(mutex_);
+    rs_ = rs;
+  }
+  RobotState get_robot_state() {
+    std::lock_guard<std::mutex> lck(mutex_);
+    return rs_;
+  }
 
+  std::mutex mutex_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::CallbackGroup::SharedPtr reentrant_group_;
+  rclcpp::CallbackGroup::SharedPtr mutually_exclusive_group_;
+
   RobotState rs_;
   double init_yaw_;
   double obstacle_;
@@ -127,6 +149,9 @@ private:
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<PreApproach>();
-  rclcpp::spin(node);
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(),
+                                                    2);
+  executor.add_node(node);
+  executor.spin();
   rclcpp::shutdown();
 }
