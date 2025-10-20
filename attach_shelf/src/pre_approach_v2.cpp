@@ -5,6 +5,7 @@
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "std_srvs/srv/empty.hpp"
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -15,6 +16,7 @@ class PreApproach : public rclcpp::Node {
   using LaserScan = sensor_msgs::msg::LaserScan;
   using Twist = geometry_msgs::msg::Twist;
   using Odometry = nav_msgs::msg::Odometry;
+  using Empty = std_srvs::srv::Empty;
 
 public:
   PreApproach() : Node("pre_approach_node"), rs_(MOVING) {
@@ -46,6 +48,21 @@ public:
     degrees_ = static_cast<double>(degrees_int);
     // convert from degree to radiant
     degrees_ *= M_PI / 180.0;
+
+    // Servie client
+    std::string n_service = "/approach_shelf";
+    client_ = create_client<Empty>(n_service);
+
+    // Wait for the service to be available
+    while (!client_->wait_for_service(std::chrono::seconds(1))) {
+      if (!rclcpp::ok()) {
+        RCLCPP_ERROR(get_logger(),
+                     "Interrupted while waiting for the service. Exiting.");
+        return;
+      }
+      RCLCPP_INFO(get_logger(), "Service %s not available, waiting again...",
+                  n_service.c_str());
+    }
 
     RCLCPP_INFO(get_logger(), "Node is ready");
   }
@@ -100,6 +117,7 @@ private:
       RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
                   yaw_diff);
       set_robot_state(STOPPED);
+      send_service_request();
     }
   }
 
@@ -138,6 +156,16 @@ private:
     return rs_;
   }
 
+  void send_service_request() {
+    auto request = std::make_shared<Empty::Request>();
+    RCLCPP_INFO(get_logger(), "Service Request");
+    client_->async_send_request(
+        request, [this](rclcpp::Client<Empty>::SharedFuture result) {
+          auto response = result.get();
+          RCLCPP_INFO(get_logger(), "Service Response: ");
+        });
+  }
+
   std::mutex mutex_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
@@ -145,6 +173,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::CallbackGroup::SharedPtr reentrant_group_;
   rclcpp::CallbackGroup::SharedPtr mutually_exclusive_group_;
+  rclcpp::Client<Empty>::SharedPtr client_;
 
   RobotState rs_;
   double init_yaw_;
