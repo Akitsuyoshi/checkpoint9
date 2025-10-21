@@ -1,4 +1,5 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_srvs/srv/empty.hpp"
@@ -10,6 +11,7 @@
 class ApproachShelf : public rclcpp::Node {
   using Empty = std_srvs::srv::Empty;
   using LaserScan = sensor_msgs::msg::LaserScan;
+  using Twist = geometry_msgs::msg::Twist;
 
 public:
   ApproachShelf() : Node("approach_shelf_server") {
@@ -29,6 +31,9 @@ public:
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
+    pub_ = create_publisher<Twist>("/diffbot_base_controller/cmd_vel_unstamped",
+                                   10);
+
     RCLCPP_INFO(get_logger(), "Service Server Ready");
   }
 
@@ -42,11 +47,13 @@ private:
     timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
       if (!detect_shelf_legs()) {
         RCLCPP_INFO(get_logger(), "2 legs are not found");
-        timer_->cancel();
         return;
       }
       publish_tf();
       lookup_tf();
+      if (!reached_tf_coord) {
+        move_robot();
+      }
     });
 
     RCLCPP_INFO(get_logger(), "Service Completed");
@@ -121,8 +128,22 @@ private:
     RCLCPP_INFO(get_logger(), "error yaw:%.3f rad", error_yaw_);
   }
 
+  void move_robot() {
+    Twist cmd;
+    if (error_distance_ < 0.1) {
+      pub_->publish(cmd);
+      reached_tf_coord = true;
+      RCLCPP_INFO(get_logger(), "Finished moving based on tf coordinates");
+    } else {
+      cmd.linear.x = std::min(0.3, error_distance_);
+      cmd.angular.z = std::clamp(error_yaw_ * 0.5, -M_PI / 6, M_PI / 6);
+      pub_->publish(cmd);
+    }
+  }
+
   rclcpp::Service<Empty>::SharedPtr service_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
+  rclcpp::Publisher<Twist>::SharedPtr pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   LaserScan::SharedPtr scan_msg_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -133,6 +154,7 @@ private:
   double my_;
   double error_distance_;
   double error_yaw_;
+  bool reached_tf_coord;
 };
 
 int main(int argc, char **argv) {
