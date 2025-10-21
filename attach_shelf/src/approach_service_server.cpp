@@ -1,17 +1,21 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
+#include <cmath>
 #include <cstddef>
+#include <functional>
 #include <tf2_ros/buffer.h>
 
 class ApproachShelf : public rclcpp::Node {
   using Empty = std_srvs::srv::Empty;
   using LaserScan = sensor_msgs::msg::LaserScan;
   using Twist = geometry_msgs::msg::Twist;
+  using Odometry = nav_msgs::msg::Odometry;
 
 public:
   ApproachShelf() : Node("approach_shelf_server") {
@@ -26,6 +30,8 @@ public:
     laser_sub_ = create_subscription<LaserScan>(
         "/scan", qos,
         [this](const LaserScan::SharedPtr msg) { callback(msg); });
+    odom_sub_ = create_subscription<Odometry>(
+        "/odom", 10, [this](const Odometry::SharedPtr msg) { callback(msg); });
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -45,14 +51,15 @@ private:
     (void)response;
 
     timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
-      if (!detect_shelf_legs()) {
-        RCLCPP_INFO(get_logger(), "2 legs are not found");
-        return;
-      }
-      publish_tf();
-      lookup_tf();
       if (!reached_tf_coord) {
-        move_robot();
+        if (!detect_shelf_legs()) {
+          RCLCPP_INFO(get_logger(), "2 legs are not found");
+          return;
+        }
+        publish_tf();
+        follow_tf();
+      } else {
+        final_approach();
       }
     });
 
@@ -60,6 +67,7 @@ private:
   }
 
   void callback(const LaserScan::SharedPtr msg) { scan_msg_ = msg; }
+  void callback(const Odometry::SharedPtr msg) { odom_msg_ = msg; }
 
   bool detect_shelf_legs() {
     std::vector<std::vector<float>> clusters;
@@ -108,7 +116,7 @@ private:
     tf_broadcaster_->sendTransform(t);
   }
 
-  void lookup_tf() {
+  void follow_tf() {
     geometry_msgs::msg::TransformStamped t;
     try {
       t = tf_buffer_->lookupTransform("robot_base_footprint", "cart_frame",
@@ -121,40 +129,76 @@ private:
     }
     double dx = t.transform.translation.x;
     double dy = t.transform.translation.y;
-    error_distance_ = std::hypot(dx, dy);
-    error_yaw_ = std::atan2(dy, dx);
-
-    RCLCPP_INFO(get_logger(), "error distance:%.3f m", error_distance_);
-    RCLCPP_INFO(get_logger(), "error yaw:%.3f rad", error_yaw_);
+    double error_distance = std::hypot(dx, dy);
+    double error_yaw = std::atan2(dy, dx);
+    move_robot(error_distance, error_yaw, 0.1, [this]() {
+      reached_tf_coord = true;
+      RCLCPP_INFO(get_logger(), "Finished moving");
+    });
   }
 
-  void move_robot() {
+  void final_approach() {
+    double x = odom_msg_->pose.pose.position.x;
+    double y = odom_msg_->pose.pose.position.y;
+    double yaw = get_yaw(odom_msg_->pose.pose.orientation);
+    if (!started_forward) {
+      goal_x_ = x + 0.3 * std::cos(yaw);
+      goal_y_ = y + 0.3 * std::sin(yaw);
+      started_forward = true;
+      RCLCPP_INFO(get_logger(), "Moving 30cm forward based on odom");
+    }
+    double dx = goal_x_ - x;
+    double dy = goal_y_ - y;
+    double error_distance = std::hypot(dx, dy);
+    double error_yaw = std::atan2(dy, dx) - yaw;
+    move_robot(error_distance, error_yaw, 0.05, [this]() {
+      timer_->cancel();
+      RCLCPP_INFO(get_logger(), "Finished moving based on odom");
+    });
+  }
+
+  double get_yaw(const geometry_msgs::msg::Quaternion &q) {
+    tf2::Quaternion tf_q(q.x, q.y, q.z, q.w);
+    tf2::Matrix3x3 m(tf_q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    return yaw;
+  }
+
+  void move_robot(double error_distance, double error_yaw,
+                  double error_tolerance, std::function<void()> callback) {
+
+    RCLCPP_INFO(get_logger(), "error distance:%.3f m", error_distance);
+    RCLCPP_INFO(get_logger(), "error yaw:%.3f rad", error_yaw);
+
     Twist cmd;
-    if (error_distance_ < 0.1) {
+    if (error_distance < error_tolerance) {
       pub_->publish(cmd);
-      reached_tf_coord = true;
-      RCLCPP_INFO(get_logger(), "Finished moving based on tf coordinates");
+      callback();
     } else {
-      cmd.linear.x = std::min(0.3, error_distance_);
-      cmd.angular.z = std::clamp(error_yaw_ * 0.5, -M_PI / 6, M_PI / 6);
+      cmd.linear.x = std::max(0.2, error_distance * 0.7);
+      cmd.angular.z = std::clamp(error_yaw * 0.5, -M_PI / 6, M_PI / 6);
       pub_->publish(cmd);
     }
   }
 
   rclcpp::Service<Empty>::SharedPtr service_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
+  rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<Twist>::SharedPtr pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   LaserScan::SharedPtr scan_msg_;
+  Odometry::SharedPtr odom_msg_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
   double mx_;
   double my_;
-  double error_distance_;
-  double error_yaw_;
+  double goal_x_;
+  double goal_y_;
   bool reached_tf_coord;
+  bool started_forward;
 };
 
 int main(int argc, char **argv) {
