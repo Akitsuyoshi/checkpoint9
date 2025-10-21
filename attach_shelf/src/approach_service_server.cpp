@@ -3,7 +3,9 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/transform_listener.h"
 #include <cstddef>
+#include <tf2_ros/buffer.h>
 
 class ApproachShelf : public rclcpp::Node {
   using Empty = std_srvs::srv::Empty;
@@ -24,6 +26,8 @@ public:
         [this](const LaserScan::SharedPtr msg) { callback(msg); });
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     RCLCPP_INFO(get_logger(), "Service Server Ready");
   }
@@ -42,6 +46,7 @@ private:
         return;
       }
       publish_tf();
+      lookup_tf();
     });
 
     RCLCPP_INFO(get_logger(), "Service Completed");
@@ -96,14 +101,38 @@ private:
     tf_broadcaster_->sendTransform(t);
   }
 
+  void lookup_tf() {
+    geometry_msgs::msg::TransformStamped t;
+    try {
+      t = tf_buffer_->lookupTransform("robot_base_footprint", "cart_frame",
+                                      tf2::TimePointZero);
+    } catch (const tf2::TransformException &e) {
+      RCLCPP_WARN(get_logger(),
+                  "Could not transform robot_base_footprint to cart_frame: %s",
+                  e.what());
+      return;
+    }
+    double dx = t.transform.translation.x;
+    double dy = t.transform.translation.y;
+    error_distance_ = std::hypot(dx, dy);
+    error_yaw_ = std::atan2(dy, dx);
+
+    RCLCPP_INFO(get_logger(), "error distance:%.3f m", error_distance_);
+    RCLCPP_INFO(get_logger(), "error yaw:%.3f rad", error_yaw_);
+  }
+
   rclcpp::Service<Empty>::SharedPtr service_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   LaserScan::SharedPtr scan_msg_;
   rclcpp::TimerBase::SharedPtr timer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
   double mx_;
   double my_;
+  double error_distance_;
+  double error_yaw_;
 };
 
 int main(int argc, char **argv) {
