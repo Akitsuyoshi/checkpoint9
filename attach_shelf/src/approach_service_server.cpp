@@ -1,6 +1,8 @@
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_srvs/srv/empty.hpp"
+#include "tf2_ros/transform_broadcaster.h"
 #include <cstddef>
 
 class ApproachShelf : public rclcpp::Node {
@@ -20,6 +22,9 @@ public:
     laser_sub_ = create_subscription<LaserScan>(
         "/scan", qos,
         [this](const LaserScan::SharedPtr msg) { callback(msg); });
+
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
     RCLCPP_INFO(get_logger(), "Service Server Ready");
   }
 
@@ -29,10 +34,16 @@ private:
     RCLCPP_INFO(get_logger(), "Service Requested");
     (void)request;
     (void)response;
-    if (!detect_shelf_legs()) {
-      RCLCPP_INFO(get_logger(), "2 legs are not found");
-      return;
-    }
+
+    timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
+      if (!detect_shelf_legs()) {
+        RCLCPP_INFO(get_logger(), "2 legs are not found");
+        timer_->cancel();
+        return;
+      }
+      publish_tf();
+    });
+
     RCLCPP_INFO(get_logger(), "Service Completed");
   }
 
@@ -68,9 +79,28 @@ private:
     return std::make_pair(range * std::cos(angle), range * std::sin(angle));
   }
 
+  void publish_tf() {
+    geometry_msgs::msg::TransformStamped t;
+    t.header.stamp = get_clock()->now();
+    t.header.frame_id = scan_msg_->header.frame_id;
+    t.child_frame_id = "cart_frame";
+
+    t.transform.translation.x = mx_;
+    t.transform.translation.y = my_;
+    t.transform.translation.z = 0.0;
+    // no rotation
+    t.transform.rotation.x = 0.0;
+    t.transform.rotation.y = 0.0;
+    t.transform.rotation.z = 0.0;
+    t.transform.rotation.w = 1.0;
+    tf_broadcaster_->sendTransform(t);
+  }
+
   rclcpp::Service<Empty>::SharedPtr service_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   LaserScan::SharedPtr scan_msg_;
+  rclcpp::TimerBase::SharedPtr timer_;
 
   double mx_;
   double my_;

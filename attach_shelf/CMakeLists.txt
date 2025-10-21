@@ -14,6 +14,7 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 
 # Create executable
@@ -24,7 +25,7 @@ add_executable(approach_service_server_node src/approach_service_server.cpp)
 # Add dependencies
 ament_target_dependencies(pre_approach_node rclcpp geometry_msgs sensor_msgs nav_msgs tf2 tf2_geometry_msgs)
 ament_target_dependencies(pre_approach_v2_node rclcpp geometry_msgs sensor_msgs nav_msgs tf2 tf2_geometry_msgs std_srvs)
-ament_target_dependencies(approach_service_server_node rclcpp std_srvs sensor_msgs)
+ament_target_dependencies(approach_service_server_node rclcpp std_srvs sensor_msgs tf2_ros geometry_msgs)
 
 # Install executables
 install(TARGETS
