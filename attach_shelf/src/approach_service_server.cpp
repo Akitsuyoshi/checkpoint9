@@ -2,15 +2,20 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <future>
+#include <memory>
 #include <tf2_ros/buffer.h>
+#include <thread>
 
 class ApproachShelf : public rclcpp::Node {
   using LaserScan = sensor_msgs::msg::LaserScan;
@@ -49,23 +54,30 @@ private:
   void callback(const std::shared_ptr<GoToLoading::Request> request,
                 std::shared_ptr<GoToLoading::Response> response) {
     RCLCPP_INFO(get_logger(), "Service Requested");
-    (void)request;
-    (void)response;
 
-    timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
-      if (!reached_tf_coord) {
-        if (!detect_shelf_legs()) {
-          RCLCPP_INFO(get_logger(), "2 legs are not found");
-          return;
-        }
-        publish_tf();
-        follow_tf();
-      } else {
-        final_approach();
-      }
-    });
-
-    RCLCPP_INFO(get_logger(), "Service Completed");
+    timer_ = create_wall_timer(
+        std::chrono::milliseconds(100), [this, request, response]() {
+          if (finished_forward) {
+            timer_->cancel();
+            response->complete = true;
+            RCLCPP_INFO(get_logger(), "Service Completed");
+            return;
+          }
+          if (reached_tf_coord) {
+            final_approach();
+            return;
+          }
+          if (!detect_shelf_legs()) {
+            timer_->cancel();
+            response->complete = false;
+            RCLCPP_INFO(get_logger(), "2 legs are not found");
+            return;
+          }
+          publish_tf();
+          if (request->attach_to_shelf) {
+            follow_tf();
+          }
+        });
   }
 
   void callback(const LaserScan::SharedPtr msg) { scan_msg_ = msg; }
@@ -154,7 +166,7 @@ private:
     double error_distance = std::hypot(dx, dy);
     double error_yaw = std::atan2(dy, dx) - yaw;
     move_robot(error_distance, error_yaw, 0.05, [this]() {
-      timer_->cancel();
+      finished_forward = true;
       pub_elevaup_->publish(std_msgs::msg::String());
       RCLCPP_INFO(get_logger(), "Published elevator UP");
     });
@@ -204,6 +216,7 @@ private:
   double goal_y_;
   bool reached_tf_coord;
   bool started_forward;
+  bool finished_forward;
 };
 
 int main(int argc, char **argv) {

@@ -113,7 +113,7 @@ private:
       init_yaw_ = yaw;
     }
     double yaw_diff = norm_angle(yaw - init_yaw_);
-    if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.02) {
+    if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.01) {
       RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
                   yaw_diff);
       set_robot_state(STOPPED);
@@ -158,11 +158,13 @@ private:
 
   void send_service_request() {
     auto request = std::make_shared<GoToLoading::Request>();
+    request->attach_to_shelf = true;
     RCLCPP_INFO(get_logger(), "Service Request");
-    client_->async_send_request(
+    auto fut = client_->async_send_request(
         request, [this](rclcpp::Client<GoToLoading>::SharedFuture result) {
           auto response = result.get();
-          RCLCPP_INFO(get_logger(), "Service Response: ");
+          RCLCPP_INFO(get_logger(), "Service Response: %s",
+                      response->complete ? "true" : "false");
         });
   }
 

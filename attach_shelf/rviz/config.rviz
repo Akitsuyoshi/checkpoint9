@@ -89,8 +89,6 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        cart_frame:
-          Value: true
         odom:
           Value: true
         robot_base_docking_contact_link:
@@ -129,8 +127,7 @@ Visualization Manager:
               robot_base_docking_contact_link:
                 {}
             robot_front_laser_base_link:
-              cart_frame:
-                {}
+              {}
             robot_omni_backwheel_link:
               {}
             robot_omni_front_leftwheel_link:
@@ -202,10 +199,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.484796404838562
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.059997592121362686
+      Yaw: 0
     Saved: ~
 Window Geometry:
   Displays:
