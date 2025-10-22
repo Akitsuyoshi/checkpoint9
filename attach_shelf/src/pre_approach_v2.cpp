@@ -91,7 +91,7 @@ private:
 
     auto min_foward_distance = *std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
-    if (min_foward_distance > obstacle_ + 0.01) {
+    if (min_foward_distance > obstacle_) {
       set_robot_state(MOVING);
     } else {
       RCLCPP_INFO(get_logger(), "Obstacle detected (%.3f m < %.3f m)",
@@ -113,7 +113,7 @@ private:
       init_yaw_ = yaw;
     }
     double yaw_diff = norm_angle(yaw - init_yaw_);
-    if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.01) {
+    if (std::abs(yaw_diff) >= std::abs(degrees_)) {
       RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
                   yaw_diff);
       set_robot_state(STOPPED);
