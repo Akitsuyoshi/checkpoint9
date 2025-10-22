@@ -48,6 +48,7 @@ public:
     degrees_ = static_cast<double>(degrees_int);
     // convert from degree to radiant
     degrees_ *= M_PI / 180.0;
+    declare_parameter<bool>("final_approach", true);
 
     // Servie client
     std::string n_service = "/approach_shelf";
@@ -113,11 +114,11 @@ private:
       init_yaw_ = yaw;
     }
     double yaw_diff = norm_angle(yaw - init_yaw_);
-    if (std::abs(yaw_diff) >= std::abs(degrees_)) {
+    if (std::abs(yaw_diff) > std::abs(degrees_)) {
       RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
                   yaw_diff);
       set_robot_state(STOPPED);
-      send_service_request();
+      service_called_ = true;
     }
   }
 
@@ -134,6 +135,11 @@ private:
       break;
     }
     pub_->publish(cmd);
+
+    if (service_called_) {
+      send_service_request();
+      service_called_ = false;
+    }
   }
 
   double norm_angle(double angle) const {
@@ -158,7 +164,7 @@ private:
 
   void send_service_request() {
     auto request = std::make_shared<GoToLoading::Request>();
-    request->attach_to_shelf = true;
+    request->attach_to_shelf = get_parameter("final_approach").as_bool();
     RCLCPP_INFO(get_logger(), "Service Request");
     auto fut = client_->async_send_request(
         request, [this](rclcpp::Client<GoToLoading>::SharedFuture result) {
@@ -181,6 +187,7 @@ private:
   double init_yaw_;
   double obstacle_;
   double degrees_;
+  bool service_called_;
 };
 
 int main(int argc, char **argv) {
