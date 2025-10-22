@@ -3,6 +3,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -39,6 +40,7 @@ public:
 
     pub_ = create_publisher<Twist>("/diffbot_base_controller/cmd_vel_unstamped",
                                    10);
+    pub_elevaup_ = create_publisher<std_msgs::msg::String>("/elevator_up", 10);
 
     RCLCPP_INFO(get_logger(), "Service Server Ready");
   }
@@ -153,7 +155,8 @@ private:
     double error_yaw = std::atan2(dy, dx) - yaw;
     move_robot(error_distance, error_yaw, 0.05, [this]() {
       timer_->cancel();
-      RCLCPP_INFO(get_logger(), "Finished moving based on odom");
+      pub_elevaup_->publish(std_msgs::msg::String());
+      RCLCPP_INFO(get_logger(), "Published elevator UP");
     });
   }
 
@@ -186,10 +189,12 @@ private:
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<Twist>::SharedPtr pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_elevaup_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   LaserScan::SharedPtr scan_msg_;
   Odometry::SharedPtr odom_msg_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr delay_timer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
