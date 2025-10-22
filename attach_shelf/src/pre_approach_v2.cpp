@@ -1,3 +1,4 @@
+#include "custom_interfaces/srv/go_to_loading.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/executor_options.hpp"
@@ -5,7 +6,6 @@
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_srvs/srv/empty.hpp"
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -16,7 +16,7 @@ class PreApproach : public rclcpp::Node {
   using LaserScan = sensor_msgs::msg::LaserScan;
   using Twist = geometry_msgs::msg::Twist;
   using Odometry = nav_msgs::msg::Odometry;
-  using Empty = std_srvs::srv::Empty;
+  using GoToLoading = custom_interfaces::srv::GoToLoading;
 
 public:
   PreApproach() : Node("pre_approach_node"), rs_(MOVING) {
@@ -51,7 +51,7 @@ public:
 
     // Servie client
     std::string n_service = "/approach_shelf";
-    client_ = create_client<Empty>(n_service);
+    client_ = create_client<GoToLoading>(n_service);
 
     // Wait for the service to be available
     while (!client_->wait_for_service(std::chrono::seconds(1))) {
@@ -157,10 +157,10 @@ private:
   }
 
   void send_service_request() {
-    auto request = std::make_shared<Empty::Request>();
+    auto request = std::make_shared<GoToLoading::Request>();
     RCLCPP_INFO(get_logger(), "Service Request");
     client_->async_send_request(
-        request, [this](rclcpp::Client<Empty>::SharedFuture result) {
+        request, [this](rclcpp::Client<GoToLoading>::SharedFuture result) {
           auto response = result.get();
           RCLCPP_INFO(get_logger(), "Service Response: ");
         });
@@ -173,7 +173,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::CallbackGroup::SharedPtr reentrant_group_;
   rclcpp::CallbackGroup::SharedPtr mutually_exclusive_group_;
-  rclcpp::Client<Empty>::SharedPtr client_;
+  rclcpp::Client<GoToLoading>::SharedPtr client_;
 
   RobotState rs_;
   double init_yaw_;

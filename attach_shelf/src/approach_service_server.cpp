@@ -1,10 +1,10 @@
+#include "custom_interfaces/srv/go_to_loading.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "std_srvs/srv/empty.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
 #include <cmath>
@@ -13,17 +13,17 @@
 #include <tf2_ros/buffer.h>
 
 class ApproachShelf : public rclcpp::Node {
-  using Empty = std_srvs::srv::Empty;
   using LaserScan = sensor_msgs::msg::LaserScan;
   using Twist = geometry_msgs::msg::Twist;
   using Odometry = nav_msgs::msg::Odometry;
+  using GoToLoading = custom_interfaces::srv::GoToLoading;
 
 public:
   ApproachShelf() : Node("approach_shelf_server") {
     std::string service_n = "/approach_shelf";
-    service_ = create_service<Empty>(
-        service_n, [this](const std::shared_ptr<Empty::Request> request,
-                          std::shared_ptr<Empty::Response> response) {
+    service_ = create_service<GoToLoading>(
+        service_n, [this](const std::shared_ptr<GoToLoading::Request> request,
+                          std::shared_ptr<GoToLoading::Response> response) {
           callback(request, response);
         });
 
@@ -46,8 +46,8 @@ public:
   }
 
 private:
-  void callback(const std::shared_ptr<Empty::Request> request,
-                std::shared_ptr<Empty::Response> response) {
+  void callback(const std::shared_ptr<GoToLoading::Request> request,
+                std::shared_ptr<GoToLoading::Response> response) {
     RCLCPP_INFO(get_logger(), "Service Requested");
     (void)request;
     (void)response;
@@ -185,7 +185,7 @@ private:
     }
   }
 
-  rclcpp::Service<Empty>::SharedPtr service_;
+  rclcpp::Service<GoToLoading>::SharedPtr service_;
   rclcpp::Subscription<LaserScan>::SharedPtr laser_sub_;
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<Twist>::SharedPtr pub_;
