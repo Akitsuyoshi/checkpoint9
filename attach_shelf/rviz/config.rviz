@@ -71,7 +71,7 @@ Visualization Manager:
       Name: LaserScan
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 1.5
+      Size (Pixels): 8
       Size (m): 0.009999999776482582
       Style: Points
       Topic:
@@ -89,6 +89,8 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        cart_frame:
+          Value: true
         odom:
           Value: true
         robot_base_docking_contact_link:
@@ -111,7 +113,7 @@ Visualization Manager:
           Value: false
         robot_top_cover_link:
           Value: false
-      Marker Scale: 0.800000011920929
+      Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -127,7 +129,8 @@ Visualization Manager:
               robot_base_docking_contact_link:
                 {}
             robot_front_laser_base_link:
-              {}
+              cart_frame:
+                {}
             robot_omni_backwheel_link:
               {}
             robot_omni_front_leftwheel_link:

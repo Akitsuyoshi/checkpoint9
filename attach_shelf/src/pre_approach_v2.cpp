@@ -171,6 +171,11 @@ private:
           auto response = result.get();
           RCLCPP_INFO(get_logger(), "Service Response: %s",
                       response->complete ? "true" : "false");
+
+          std::thread([]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            rclcpp::shutdown();
+          }).detach();
         });
   }
 

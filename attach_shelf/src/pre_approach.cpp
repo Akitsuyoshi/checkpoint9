@@ -102,6 +102,10 @@ private:
       RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians",
                   yaw_diff);
       set_robot_state(STOPPED);
+      std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        rclcpp::shutdown();
+      }).detach();
     }
   }
 
