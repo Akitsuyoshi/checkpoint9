@@ -30,6 +30,9 @@ PreApproach::PreApproach(const rclcpp::NodeOptions &options)
   obstacle_ = 0.3;
   degrees_ = (-90) * M_PI / 180.0;
 
+  //   param
+  declare_parameter<bool>("final_approach", false);
+
   //   Move robot
   set_robot_state(MOVING);
   RCLCPP_INFO(get_logger(), "Node is ready");
@@ -77,10 +80,12 @@ void PreApproach::callback(const Odometry::SharedPtr msg) {
   if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.02) {
     RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians", yaw_diff);
     set_robot_state(STOPPED);
-    std::thread([]() {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      rclcpp::shutdown();
-    }).detach();
+    if (!get_parameter("final_approach").as_bool()) {
+      std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        rclcpp::shutdown();
+      }).detach();
+    }
   }
 }
 

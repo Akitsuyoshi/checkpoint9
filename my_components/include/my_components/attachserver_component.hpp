@@ -50,7 +50,6 @@ protected:
   double get_yaw(const geometry_msgs::msg::Quaternion &q) const;
   void move_robot(double error_distance, double error_yaw,
                   double error_tolerance, std::function<void()> callback);
-  void graceful_shutdown();
 
 private:
   std::mutex mutex_;

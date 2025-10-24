@@ -9,7 +9,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            ComposableNode(package='my_components', plugin='my_components::PreApproach', name='pre_approach'),
+            ComposableNode(package='my_components', plugin='my_components::PreApproach', name='pre_approach', parameters=[{'final_approach': True}]),
             ComposableNode(package='my_components', plugin='my_components::AttachServer', name='attach_server'),
         ],
         output='screen',

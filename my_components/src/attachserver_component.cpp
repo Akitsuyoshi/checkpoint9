@@ -46,20 +46,17 @@ void AttachServer::callback(const std::shared_ptr<GoToLoading::Request> request,
   if (!odom_msg_ || !scan_msg_) {
     response->complete = false;
     RCLCPP_INFO(get_logger(), "Odom/Scan data is not available");
-    graceful_shutdown();
     return;
   }
   if (!detect_shelf_legs()) {
     response->complete = false;
     RCLCPP_INFO(get_logger(), "2 legs are not found");
-    graceful_shutdown();
     return;
   }
   if (!request->attach_to_shelf) {
     publish_tf(true);
     response->complete = true;
     RCLCPP_INFO(get_logger(), "Published statif tf");
-    graceful_shutdown();
     return;
   }
 
@@ -87,7 +84,6 @@ void AttachServer::callback(const std::shared_ptr<GoToLoading::Request> request,
     timer_tf_->cancel();
     response->complete = false;
     RCLCPP_INFO(get_logger(), "Service timedout");
-    graceful_shutdown();
     return;
   }
   auto promise2 = std::make_shared<std::promise<void>>();
@@ -107,12 +103,10 @@ void AttachServer::callback(const std::shared_ptr<GoToLoading::Request> request,
     timer_final_->cancel();
     response->complete = false;
     RCLCPP_INFO(get_logger(), "Service timedout");
-    graceful_shutdown();
     return;
   }
   response->complete = true;
   RCLCPP_INFO(get_logger(), "Service completed");
-  graceful_shutdown();
 }
 void AttachServer::callback(const LaserScan::SharedPtr msg) {
   std::lock_guard<std::mutex> lck(mutex_);
@@ -254,12 +248,6 @@ void AttachServer::move_robot(double error_distance, double error_yaw,
     cmd.angular.z = std::clamp(error_yaw * 0.5, -M_PI / 6, M_PI / 6);
     pub_->publish(cmd);
   }
-}
-void AttachServer::graceful_shutdown() {
-  std::thread([]() {
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    rclcpp::shutdown();
-  }).detach();
 }
 
 } // namespace my_components
