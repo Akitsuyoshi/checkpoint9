@@ -35,9 +35,11 @@ include_directories(include)
 
 add_library(preapproach_component SHARED src/preapproach_component.cpp)
 add_library(attachserver_component SHARED src/attachserver_component.cpp)
+add_library(attachclient_component SHARED src/attachclient_component.cpp)
 
 target_compile_definitions(preapproach_component PRIVATE "COMPOSITION_BUILDING_DLL")
 target_compile_definitions(attachserver_component PRIVATE "COMPOSITION_BUILDING_DLL")
+target_compile_definitions(attachclient_component PRIVATE "COMPOSITION_BUILDING_DLL")
 
 ament_target_dependencies(preapproach_component
   rclcpp
@@ -58,16 +60,24 @@ ament_target_dependencies(attachserver_component
   std_msgs
   custom_interfaces
 )
+ament_target_dependencies(attachclient_component
+  rclcpp
+  rclcpp_components
+  custom_interfaces
+)
 
 rclcpp_components_register_nodes(preapproach_component "my_components::PreApproach")
 rclcpp_components_register_nodes(attachserver_component "my_components::AttachServer")
+rclcpp_components_register_nodes(attachclient_component "my_components::AttachClient")
 
 set(node_plugins "${node_plugins}my_components::PreApproach;$<TARGET_FILE:preapproach_component>\n")
 set(node_plugins "${node_plugins}my_components::AttachServer;$<TARGET_FILE:attachserver_component>\n")
+set(node_plugins "${node_plugins}my_components::AttachClient;$<TARGET_FILE:attachclient_component>\n")
 
 install(TARGETS
   preapproach_component
   attachserver_component
+  attachclient_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
