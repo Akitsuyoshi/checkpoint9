@@ -15,6 +15,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(custom_interfaces REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(std_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -31,7 +34,11 @@ endif()
 include_directories(include)
 
 add_library(preapproach_component SHARED src/preapproach_component.cpp)
+add_library(attachserver_component SHARED src/attachserver_component.cpp)
+
 target_compile_definitions(preapproach_component PRIVATE "COMPOSITION_BUILDING_DLL")
+target_compile_definitions(attachserver_component PRIVATE "COMPOSITION_BUILDING_DLL")
+
 ament_target_dependencies(preapproach_component
   rclcpp
   rclcpp_components
@@ -41,11 +48,26 @@ ament_target_dependencies(preapproach_component
   tf2
   tf2_geometry_msgs
 )
+ament_target_dependencies(attachserver_component
+  rclcpp
+  rclcpp_components
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+  tf2_ros
+  std_msgs
+  custom_interfaces
+)
+
 rclcpp_components_register_nodes(preapproach_component "my_components::PreApproach")
+rclcpp_components_register_nodes(attachserver_component "my_components::AttachServer")
+
 set(node_plugins "${node_plugins}my_components::PreApproach;$<TARGET_FILE:preapproach_component>\n")
+set(node_plugins "${node_plugins}my_components::AttachServer;$<TARGET_FILE:attachserver_component>\n")
 
 install(TARGETS
   preapproach_component
+  attachserver_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
