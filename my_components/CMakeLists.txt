@@ -82,4 +82,12 @@ install(TARGETS
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
 
+# Install launch files
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/)
+
+# Install rviz files
+install(DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}/)
+
 ament_package()
