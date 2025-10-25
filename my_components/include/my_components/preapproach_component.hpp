@@ -54,6 +54,7 @@ private:
   double init_yaw_;
   double obstacle_;
   double degrees_;
+  bool is_finished_;
 };
 
 } // namespace my_components

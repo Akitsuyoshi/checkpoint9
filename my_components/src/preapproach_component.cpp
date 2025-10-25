@@ -4,7 +4,7 @@ using namespace std::chrono_literals;
 
 namespace my_components {
 PreApproach::PreApproach(const rclcpp::NodeOptions &options)
-    : Node("preapproach", options) {
+    : Node("preapproach", options), is_finished_(false) {
 
   reentrant_group_ =
       create_callback_group(rclcpp::CallbackGroupType::Reentrant);
@@ -80,12 +80,7 @@ void PreApproach::callback(const Odometry::SharedPtr msg) {
   if (std::abs(yaw_diff) >= std::abs(degrees_) - 0.02) {
     RCLCPP_INFO(get_logger(), "Turn completed: rotated %.3f radians", yaw_diff);
     set_robot_state(STOPPED);
-    if (!get_parameter("final_approach").as_bool()) {
-      std::thread([]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        rclcpp::shutdown();
-      }).detach();
-    }
+    is_finished_ = true;
   }
 }
 
@@ -102,6 +97,14 @@ void PreApproach::callback() {
     break;
   }
   pub_->publish(cmd);
+
+  if (is_finished_) {
+    if (!get_parameter("final_approach").as_bool()) {
+      rclcpp::shutdown();
+    } else {
+      timer_->cancel();
+    }
+  }
 }
 
 double PreApproach::norm_angle(double angle) const {
